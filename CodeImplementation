@@ -1,0 +1,63 @@
+from scapy.all import ARP, Ether, srp
+import socket
+import nmap
+
+def scan_network(ip_range):
+    print(f"Scanning IP range: {ip_range}")
+    arp = ARP(pdst=ip_range)
+    ether = Ether(dst="ff:ff:ff:ff:ff:ff")
+    packet = ether / arp
+    result = srp(packet, timeout=2, verbose=0)[0]
+
+    devices = []
+    for sent, received in result:
+        devices.append({'ip': received.psrc, 'mac': received.hwsrc})
+    return devices
+
+def scan_ports(host):
+    print(f"Scanning ports on host: {host}")
+    scanner = nmap.PortScanner()
+    scanner.scan(host, '1-1024')  # Scans the first 1024 ports (can be modified)
+    port_info = {}
+    for port in scanner[host]['tcp']:
+        port_info[port] = scanner[host]['tcp'][port]['state']
+    return port_info
+
+def banner_grabbing(host, port):
+    try:
+        sock = socket.socket()
+        sock.settimeout(2)
+        sock.connect((host, port))
+        sock.send(b'HEAD / HTTP/1.1\r\n\r\n')
+        banner = sock.recv(1024)
+        sock.close()
+        return banner.decode().strip()
+    except Exception as e:
+        return str(e)
+
+def os_detection(host):
+    scanner = nmap.PortScanner()
+    scanner.scan(host, arguments="-O")  # -O flag is for OS detection
+    if 'osmatch' in scanner[host]:
+        return scanner[host]['osmatch']
+    else:
+        return "OS Detection not available"
+
+def advanced_network_scan(ip_range):
+    devices = scan_network(ip_range)
+    print("\nActive Devices Found:")
+    for device in devices:
+        print(f"IP: {device['ip']}, MAC: {device['mac']}")
+        ports = scan_ports(device['ip'])
+        print("\nOpen Ports and States:")
+        for port, state in ports.items():
+            print(f"Port {port}: {state}")
+            if state == 'open':
+                banner = banner_grabbing(device['ip'], port)
+                print(f"Service Banner: {banner}")
+        os_info = os_detection(device['ip'])
+        print(f"Operating System: {os_info}")
+        print("\n" + "-"*30 + "\n")
+
+ip_range = "192.168.1.1/24"
+advanced_network_scan(ip_range)
